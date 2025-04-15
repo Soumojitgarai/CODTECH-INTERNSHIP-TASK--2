@@ -26,21 +26,32 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const wsUrl = `${protocol}//${window.location.host}/ws`;
       
+      console.log(`Connecting to WebSocket at ${wsUrl}`);
       const newSocket = new WebSocket(wsUrl);
       
       newSocket.onopen = () => {
-        console.log("WebSocket connected");
+        console.log("WebSocket connected successfully");
         setConnected(true);
       };
       
-      newSocket.onclose = () => {
-        console.log("WebSocket disconnected");
+      newSocket.onmessage = (event) => {
+        console.log("WebSocket message received:", event.data);
+        try {
+          const data = JSON.parse(event.data);
+          console.log("Parsed WebSocket message:", data);
+        } catch (e) {
+          console.error("Error parsing WebSocket message:", e);
+        }
+      };
+      
+      newSocket.onclose = (event) => {
+        console.log("WebSocket disconnected with code:", event.code, "reason:", event.reason);
         setConnected(false);
         
         // Attempt to reconnect after a delay
         setTimeout(() => {
           connectWebSocket();
-        }, 2000);
+        }, 5000); // Increased timeout to 5 seconds
       };
       
       newSocket.onerror = (error) => {
@@ -72,9 +83,13 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   // Function to send messages
   const sendMessage = useCallback((message: any) => {
     if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify(message));
+      console.log("Sending WebSocket message:", message);
+      const messageString = JSON.stringify(message);
+      socket.send(messageString);
+      console.log("Message sent:", messageString);
     } else {
-      console.warn("WebSocket not connected, can't send message");
+      console.warn("WebSocket not connected, can't send message. Socket state:", 
+        socket ? ["CONNECTING", "OPEN", "CLOSING", "CLOSED"][socket.readyState] : "null");
     }
   }, [socket]);
   

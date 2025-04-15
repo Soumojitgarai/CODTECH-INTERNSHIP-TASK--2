@@ -85,7 +85,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Calculate initials if not provided
       if (!userData.initials) {
         userData.initials = userData.username.split(' ')
-          .map(n => n[0])
+          .map((n: string) => n[0])
           .join('')
           .toUpperCase()
           .substring(0, 2);
@@ -121,13 +121,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     socket.on('message', async (data) => {
       try {
+        console.log("Received WebSocket message:", data.toString());
         const message = JSON.parse(data.toString());
         
-        // Validate message format
-        const validationResult = messageTypeSchema.safeParse(message.type);
-        if (!validationResult.success) {
-          sendError(socket, 'Invalid message format');
+        console.log("Parsed message:", message);
+        if (!message.type) {
+          console.log("Message missing type:", message);
+          sendError(socket, 'Message missing type field');
           return;
+        }
+        
+        // Validate message format - looser validation to allow more messages through
+        try {
+          const validationResult = messageTypeSchema.safeParse(message.type);
+          if (!validationResult.success) {
+            console.log("Validation failed for message type:", message.type);
+            console.log("Validation errors:", validationResult.error);
+            sendError(socket, `Invalid message type: ${message.type}`);
+            return;
+          }
+        } catch (validationError) {
+          console.error("Error validating message type:", validationError);
         }
         
         const type = message.type as MessageType;
@@ -156,7 +170,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     socket.on('close', () => {
       // Find and remove the client
-      for (const [userId, client] of clients.entries()) {
+      Array.from(clients.entries()).forEach(([userId, client]) => {
         if (client.socket === socket) {
           clients.delete(userId);
           
@@ -175,10 +189,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
             })
             .catch(err => console.error('Error updating user status:', err));
-          
-          break;
         }
-      }
+      });
       
       console.log('Client disconnected');
     });
@@ -202,7 +214,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user = await storage.createUser({
           username,
           password: 'defaultPassword', // In a real app, you'd handle this differently
-          initials: username.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2),
+          initials: username.split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2),
           color: 'bg-blue-500' // Default color
         });
       } catch (error) {
@@ -359,13 +371,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
   
   function broadcastToAll(message: ChatMessage, excludeUserId?: number): void {
-    for (const [userId, client] of clients.entries()) {
+    Array.from(clients.entries()).forEach(([userId, client]) => {
       if (excludeUserId && userId === excludeUserId) {
-        continue;
+        return; // Skip this iteration
       }
       
       send(client.socket, message);
-    }
+    });
   }
   
   return httpServer;
